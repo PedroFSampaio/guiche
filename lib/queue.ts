@@ -1,39 +1,225 @@
 export const SERVICES = { AC: 'Alto Custo', RM: 'Retirada de medicamentos', ED: 'Entrega de documentos' };
 export type Service = keyof typeof SERVICES;
 export type Role = Service | 'admin' | 'reception' | 'tv';
-export type Member = {email:string;name:string;role:Role;location:string};
-export type Patient = {id:string;day:string;number:number;code:string;name:string;service:Service;next:Service[];priority:boolean;created:number;queued:number;status:string;owner?:string;called?:number;announced?:number;started?:number;closed?:number;subsequent:string[];events:{at:number;text:string}[]};
-export type Announcement = {id:string;patientId:string;day:string;name:string;code:string;service:Service;location:string;owner:string;created:number;started?:number;ended?:number;lease?:string};
-export type State = {members:Member[];patients:Patient[];announcements:Announcement[];counters:Record<string,number>};
-export const emptyState = ():State=>({members:[],patients:[],announcements:[],counters:{}});
-export const dayKey=(time=Date.now())=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(time);
-export const spokenName=(name:string)=>{const words=name.trim().split(/\s+/);return words.length>1?`${words[0]} ${words.at(-1)}`:words[0]};
-export const isOpen=(p:Patient)=>['waiting','calling','serving'].includes(p.status);
-export const isPending=(p:Patient)=>['calling','serving'].includes(p.status);
-const assert=(ok:unknown,message:string)=>{if(!ok)throw Error(message)};
-function event(p:Patient,text:string,now:number){p.events.push({at:now,text})}
-function allocate(s:State,service:Service,day:string){const key=day+service;const n=(s.counters[key]??0)+1;s.counters[key]=n;return {number:n,code:`${service}-${String(n).padStart(3,'0')}`}}
-export function mutate(s:State,m:Member,b:any,now=Date.now()){
- const day=dayKey(now);const admin=m.role==='admin';const reception=admin||m.role==='reception';const operator=admin||Object.hasOwn(SERVICES,m.role);
- if(b.action==='member'){assert(admin,'Acesso restrito à administração.');assert(typeof b.email==='string'&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email),'Informe um e-mail válido.');assert(['admin','reception','tv',...Object.keys(SERVICES)].includes(b.role),'Perfil inválido.');const email=b.email.trim().toLowerCase();assert(email!==m.email,'Não altere seu próprio acesso.');const member={email,name:String(b.name||email).slice(0,100),role:b.role,location:String(b.location||'').trim().slice(0,80)};assert(!(Object.hasOwn(SERVICES,b.role))||member.location,'Informe o local de atendimento.');s.members=s.members.filter(x=>x.email!==email);s.members.push(member);return {ok:true}}
- if(b.action==='create'){assert(reception,'Somente a recepção pode cadastrar.');const name=String(b.name||'').trim().replace(/\s+/g,' ');assert(name.length>=2&&name.length<=160,'Informe um nome entre 2 e 160 caracteres.');assert(Object.hasOwn(SERVICES,b.service),'Atividade inválida.');const next=Array.isArray(b.next)?[...new Set<Service>(b.next)]:[];assert(next.every(x=>Object.hasOwn(SERVICES,x)&&x!==b.service),'Próximas atividades inválidas.');const p:Patient={id:crypto.randomUUID(),day,...allocate(s,b.service,day),name,service:b.service,next,priority:!!b.priority,created:now,queued:now,status:'waiting',subsequent:[],events:[]};event(p,`Chegada registrada por ${m.name}`,now);s.patients.push(p);return {id:p.id,code:p.code}}
- if(b.action==='claimAnnouncement'){assert(admin||m.role==='tv','Acesso exclusivo da TV.');assert(typeof b.lease==='string'&&b.lease.length<100,'Painel inválido.');const active=s.announcements.find(a=>a.started&&!a.ended);if(active){if(now-active.started!<45000)return active.lease===b.lease?active:null;active.ended=now;const old=s.patients.find(p=>p.id===active.patientId);if(old)event(old,'Anúncio interrompido por perda de conexão da TV.',now)}const a=s.announcements.find(a=>!a.started&&!a.ended&&a.day===day&&s.patients.some(p=>p.id===a.patientId&&isPending(p)));if(!a)return null;a.started=now;a.lease=b.lease;const p=s.patients.find(p=>p.id===a.patientId)!;p.announced=now;event(p,'Chamada exibida na TV.',now);return a}
- if(b.action==='finishAnnouncement'){assert(admin||m.role==='tv','Acesso exclusivo da TV.');const a=s.announcements.find(a=>a.id===b.id);assert(a&&a.lease===b.lease,'Anúncio inválido.');assert(a!.started&&now-a!.started>=7000,'A chamada deve permanecer por 7 segundos.');a!.ended=now;return {ok:true}}
- if(b.action==='call'){assert(operator,'Acesso restrito ao responsável.');const service=admin?b.service:m.role;assert(Object.hasOwn(SERVICES,service),'Selecione uma atividade.');const p=s.patients.filter(p=>p.service===service&&p.status==='waiting'&&p.day===day).sort((a,b)=>Number(b.priority)-Number(a.priority)||a.queued-b.queued)[0];assert(p,'Nenhum paciente aguardando.');const pending=s.patients.filter(x=>x.owner===m.email&&isPending(x));assert(!pending.length||b.acknowledge,'Há atendimento pendente. Resolva ou confirme o aviso para continuar.');for(const old of pending){if(old.id!==p.id&&!old.subsequent.includes(p.id)){old.subsequent.push(p.id);if(old.subsequent.length>=3){old.status='automatic';old.closed=now;event(old,'Encerrado automaticamente após três pacientes distintos chamados pelo mesmo responsável; sem conclusão informada.',now)}}}p.status='calling';p.owner=m.email;p.called=now;p.announced=undefined;p.subsequent=[];event(p,`Chamado por ${m.name}`,now);const a=announce(s,p,m,now,b.location);return {id:p.id,announcement:a.id}}
- const p=s.patients.find(p=>p.id===b.id);assert(p,'Paciente não encontrado.');assert(admin||m.role==='reception'||p!.service===m.role,'Você não tem acesso a esta atividade.');
- if(b.action==='edit'){assert(reception&&p!.status==='waiting','Somente pacientes aguardando podem ser corrigidos.');const name=String(b.name||'').trim().replace(/\s+/g,' ');assert(name.length>=2&&name.length<=160,'Nome inválido.');p!.name=name;p!.priority=!!b.priority;event(p!,`Cadastro corrigido por ${m.name}`,now);return {ok:true}}
- assert(reception||p!.owner===m.email||p!.status==='waiting'||p!.status==='absent','Atendimento pertence a outro responsável.');
- if(b.action==='recall'){assert(operator&&isPending(p!),'Paciente não está em chamada ou atendimento.');assert(!s.announcements.some(a=>a.patientId===p!.id&&!a.ended),'Já existe anúncio pendente para este paciente.');announce(s,p!,m,now,b.location);event(p!,`Rechamada por ${m.name}`,now);return {ok:true}}
- if(b.action==='start'){assert(operator&&p!.status==='calling'&&p!.announced,'Aguarde o anúncio na TV antes de iniciar.');p!.status='serving';p!.started=now;event(p!,'Atendimento iniciado.',now)}
- else if(b.action==='return'){assert(p!.status==='absent','Apenas ausentes podem retornar.');assert(p!.day===day,'Registre uma nova chegada para atendimento em outro dia.');p!.status='waiting';p!.queued=now;p!.owner=undefined;p!.closed=undefined;p!.subsequent=[];event(p!,'Paciente reinserido na fila com a mesma senha.',now)}
- else if(b.action==='transfer'){assert(isOpen(p!),'Paciente já encerrado.');assert(Object.hasOwn(SERVICES,b.service)&&b.service!==p!.service,'Selecione outra atividade.');transfer(s,p!,b.service,now);event(p!,`Transferência realizada por ${m.name}`,now)}
- else if(b.action==='finish'){assert(operator&&p!.status==='serving','Inicie o atendimento antes de finalizar.');if(p!.next.length){const next=p!.next.shift()!;event(p!,'Atividade concluída; encaminhado à próxima atividade.',now);transfer(s,p!,next,now)}else{p!.status='done';p!.closed=now;event(p!,'Atendimento finalizado.',now)}}
- else if(['absent','left','cancelled'].includes(b.action)){assert(isOpen(p!),'Paciente já encerrado.');if(b.action==='absent')assert(p!.announced,'Aguarde o anúncio antes de marcar ausência.');p!.status=b.action;p!.closed=now;event(p!,`${{absent:'Ausente',left:'Foi embora',cancelled:'Cancelado'}[b.action as 'absent']} — ${m.name}`,now)}
- else throw Error('Ação inválida.');
- if(!isPending(p!))for(const a of s.announcements.filter(a=>a.patientId===p!.id&&!a.started&&!a.ended))a.ended=now;
- return {ok:true};
+export type Member = {
+    username?: string;
+    email: string;
+    name: string;
+    role: Role;
+    location: string;
+};
+export type Patient = {
+    id: string;
+    day: string;
+    number: number;
+    code: string;
+    name: string;
+    service: Service;
+    next: Service[];
+    priority: boolean;
+    created: number;
+    queued: number;
+    status: string;
+    owner?: string;
+    calledByName?: string;
+    calledByUsername?: string;
+    called?: number;
+    announced?: number;
+    started?: number;
+    closed?: number;
+    subsequent: string[];
+    events: {
+        at: number;
+        text: string;
+    }[];
+};
+export type Announcement = {
+    id: string;
+    patientId: string;
+    day: string;
+    name: string;
+    code: string;
+    service: Service;
+    location: string;
+    owner: string;
+    created: number;
+    started?: number;
+    ended?: number;
+    lease?: string;
+};
+export type State = {
+    members: Member[];
+    patients: Patient[];
+    announcements: Announcement[];
+    counters: Record<string, number>;
+};
+export const emptyState = (): State => ({ members: [], patients: [], announcements: [], counters: {} });
+export const dayKey = (time = Date.now()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(time);
+export const spokenName = (name: string) => { const words = name.trim().split(/\s+/); return words.length > 1 ? `${words[0]} ${words.at(-1)}` : words[0]; };
+export const isOpen = (p: Patient) => ['waiting', 'calling', 'serving'].includes(p.status);
+export const isPending = (p: Patient) => ['calling', 'serving'].includes(p.status);
+const assert = (ok: unknown, message: string) => { if (!ok)
+    throw Error(message); };
+function event(p: Patient, text: string, now: number) { p.events.push({ at: now, text }); }
+function allocate(s: State, service: Service, day: string) { const key = day + service; const n = (s.counters[key] ?? 0) + 1; s.counters[key] = n; return { number: n, code: `${service}-${String(n).padStart(3, '0')}` }; }
+export type QueueAction = {
+    action: string;
+    id?: string;
+    name?: string;
+    service?: Service;
+    next?: Service[];
+    priority?: boolean;
+    acknowledge?: boolean;
+    lease?: string;
+    location?: string;
+};
+function requireService(value: unknown): Service { if (typeof value !== 'string' || !Object.hasOwn(SERVICES, value))
+    throw Error('Atividade inválida.'); return value as Service; }
+export function mutate(s: State, m: Member, b: QueueAction, now = Date.now()) {
+    const day = dayKey(now);
+    const admin = m.role === 'admin';
+    const reception = admin || m.role === 'reception';
+    const operator = admin || Object.hasOwn(SERVICES, m.role);
+    if (b.action === 'create') {
+        assert(reception, 'Somente a recepção pode cadastrar.');
+        const name = String(b.name || '').trim().replace(/\s+/g, ' ');
+        assert(name.length >= 2 && name.length <= 160, 'Informe um nome entre 2 e 160 caracteres.');
+        const service = requireService(b.service);
+        const next = Array.isArray(b.next) ? [...new Set<Service>(b.next)] : [];
+        assert(next.every(x => Object.hasOwn(SERVICES, x) && x !== b.service), 'Próximas atividades inválidas.');
+        const p: Patient = { id: crypto.randomUUID(), day, ...allocate(s, service, day), name, service, next, priority: !!b.priority, created: now, queued: now, status: 'waiting', subsequent: [], events: [] };
+        event(p, `Chegada registrada por ${m.name}`, now);
+        s.patients.push(p);
+        return { id: p.id, code: p.code };
+    }
+    if (b.action === 'claimAnnouncement') {
+        assert(admin || m.role === 'tv', 'Acesso exclusivo da TV.');
+        assert(typeof b.lease === 'string' && b.lease.length < 100, 'Painel inválido.');
+        const active = s.announcements.find(a => a.started && !a.ended);
+        if (active) {
+            if (now - active.started! < 45000)
+                return active.lease === b.lease ? active : null;
+            active.ended = now;
+            const old = s.patients.find(p => p.id === active.patientId);
+            if (old)
+                event(old, 'Anúncio interrompido por perda de conexão da TV.', now);
+        }
+        const a = s.announcements.find(a => !a.started && !a.ended && a.day === day && s.patients.some(p => p.id === a.patientId && isPending(p)));
+        if (!a)
+            return null;
+        a.started = now;
+        a.lease = b.lease;
+        const p = s.patients.find(p => p.id === a.patientId)!;
+        p.announced = now;
+        event(p, 'Chamada exibida na TV.', now);
+        return a;
+    }
+    if (b.action === 'finishAnnouncement') {
+        assert(admin || m.role === 'tv', 'Acesso exclusivo da TV.');
+        const a = s.announcements.find(a => a.id === b.id);
+        assert(a && a.lease === b.lease, 'Anúncio inválido.');
+        assert(a!.started && now - a!.started >= 7000, 'A chamada deve permanecer por 7 segundos.');
+        a!.ended = now;
+        return { ok: true };
+    }
+    if (b.action === 'call') {
+        assert(operator, 'Acesso restrito ao responsável.');
+        const service = requireService(admin ? b.service : m.role);
+        const p = s.patients.filter(p => p.service === service && p.status === 'waiting' && p.day === day).sort((a, b) => Number(b.priority) - Number(a.priority) || a.queued - b.queued)[0];
+        assert(p, 'Nenhum paciente aguardando.');
+        const pending = s.patients.filter(x => x.owner === m.email && isPending(x));
+        assert(!pending.length || b.acknowledge, 'Há atendimento pendente. Resolva ou confirme o aviso para continuar.');
+        for (const old of pending) {
+            if (old.id !== p.id && !old.subsequent.includes(p.id)) {
+                old.subsequent.push(p.id);
+                if (old.subsequent.length >= 3) {
+                    old.status = 'automatic';
+                    old.closed = now;
+                    event(old, 'Encerrado automaticamente após três pacientes distintos chamados pelo mesmo responsável; sem conclusão informada.', now);
+                }
+            }
+        }
+        p.status = 'calling';
+        p.owner = m.email;
+        p.calledByName = m.name;
+        p.calledByUsername = m.username;
+        p.called = now;
+        p.announced = undefined;
+        p.subsequent = [];
+        event(p, `Chamado por ${m.name}`, now);
+        const a = announce(s, p, m, now, b.location);
+        return { id: p.id, announcement: a.id };
+    }
+    const p = s.patients.find(p => p.id === b.id);
+    assert(p, 'Paciente não encontrado.');
+    assert(admin || m.role === 'reception' || p!.service === m.role, 'Você não tem acesso a esta atividade.');
+    if (b.action === 'edit') {
+        assert(reception && p!.status === 'waiting', 'Somente pacientes aguardando podem ser corrigidos.');
+        const name = String(b.name || '').trim().replace(/\s+/g, ' ');
+        assert(name.length >= 2 && name.length <= 160, 'Nome inválido.');
+        p!.name = name;
+        p!.priority = !!b.priority;
+        event(p!, `Cadastro corrigido por ${m.name}`, now);
+        return { ok: true };
+    }
+    assert(reception || p!.owner === m.email || p!.status === 'waiting' || p!.status === 'absent', 'Atendimento pertence a outro responsável.');
+    if (b.action === 'recall') {
+        assert(operator && isPending(p!), 'Paciente não está em chamada ou atendimento.');
+        assert(!s.announcements.some(a => a.patientId === p!.id && !a.ended), 'Já existe anúncio pendente para este paciente.');
+        announce(s, p!, m, now, b.location);
+        event(p!, `Rechamada por ${m.name}`, now);
+        return { ok: true };
+    }
+    if (b.action === 'start') {
+        assert(operator && p!.status === 'calling' && p!.announced, 'Aguarde o anúncio na TV antes de iniciar.');
+        p!.status = 'serving';
+        p!.started = now;
+        event(p!, 'Atendimento iniciado.', now);
+    }
+    else if (b.action === 'return') {
+        assert(p!.status === 'absent', 'Apenas ausentes podem retornar.');
+        assert(p!.day === day, 'Registre uma nova chegada para atendimento em outro dia.');
+        p!.status = 'waiting';
+        p!.queued = now;
+        p!.owner = undefined;
+        p!.closed = undefined;
+        p!.subsequent = [];
+        event(p!, 'Paciente reinserido na fila com a mesma senha.', now);
+    }
+    else if (b.action === 'transfer') {
+        assert(isOpen(p!), 'Paciente já encerrado.');
+        const service = requireService(b.service);
+        assert(service !== p!.service, 'Selecione outra atividade.');
+        transfer(s, p!, service, now);
+        event(p!, `Transferência realizada por ${m.name}`, now);
+    }
+    else if (b.action === 'finish') {
+        assert(operator && p!.status === 'serving', 'Inicie o atendimento antes de finalizar.');
+        if (p!.next.length) {
+            const next = p!.next.shift()!;
+            event(p!, 'Atividade concluída; encaminhado à próxima atividade.', now);
+            transfer(s, p!, next, now);
+        }
+        else {
+            p!.status = 'done';
+            p!.closed = now;
+            event(p!, 'Atendimento finalizado.', now);
+        }
+    }
+    else if (['absent', 'left', 'cancelled'].includes(b.action)) {
+        assert(isOpen(p!), 'Paciente já encerrado.');
+        if (b.action === 'absent')
+            assert(p!.announced, 'Aguarde o anúncio antes de marcar ausência.');
+        p!.status = b.action;
+        p!.closed = now;
+        event(p!, `${{ absent: 'Ausente', left: 'Foi embora', cancelled: 'Cancelado' }[b.action as 'absent']} — ${m.name}`, now);
+    }
+    else
+        throw Error('Ação inválida.');
+    if (!isPending(p!))
+        for (const a of s.announcements.filter(a => a.patientId === p!.id && !a.started && !a.ended))
+            a.ended = now;
+    return { ok: true };
 }
-function transfer(s:State,p:Patient,service:Service,now:number){event(p,`Transferido de ${SERVICES[p.service]} (${p.code}) para ${SERVICES[service]}.`,now);p.service=service;Object.assign(p,allocate(s,service,p.day));p.next=p.next.filter(x=>x!==service);p.status='waiting';p.queued=now;p.owner=undefined;p.called=undefined;p.announced=undefined;p.started=undefined;p.subsequent=[]}
-function announce(s:State,p:Patient,m:Member,now:number,location?:string){const local=m.role==='admin'?String(location||'').trim():m.location;assert(local,'Informe o local de atendimento.');const a:Announcement={id:crypto.randomUUID(),patientId:p.id,day:dayKey(now),name:p.name,code:p.code,service:p.service,location:local,owner:m.email,created:now};s.announcements.push(a);return a}
-
-
+function transfer(s: State, p: Patient, service: Service, now: number) { event(p, `Transferido de ${SERVICES[p.service]} (${p.code}) para ${SERVICES[service]}.`, now); p.service = service; Object.assign(p, allocate(s, service, p.day)); p.next = p.next.filter(x => x !== service); p.status = 'waiting'; p.queued = now; p.owner = undefined; p.calledByName = undefined; p.calledByUsername = undefined; p.called = undefined; p.announced = undefined; p.started = undefined; p.subsequent = []; }
+function announce(s: State, p: Patient, m: Member, now: number, location?: string) { const local = m.role === 'admin' ? String(location || '').trim() : m.location; assert(local, 'Informe o local de atendimento.'); const a: Announcement = { id: crypto.randomUUID(), patientId: p.id, day: dayKey(now), name: p.name, code: p.code, service: p.service, location: local, owner: m.email, created: now }; s.announcements.push(a); return a; }

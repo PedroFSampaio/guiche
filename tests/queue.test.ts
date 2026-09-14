@@ -1,13 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {emptyState,mutate,dayKey,spokenName,type Member} from '../lib/queue.ts';
+import {emptyState,mutate,dayKey,spokenName,type Service,type Member} from '../lib/queue.ts';
 const reception:Member={email:'r@unit.test',name:'Recepção',role:'reception',location:''};
 const ac:Member={email:'ac@unit.test',name:'Responsável A',role:'AC',location:'Guichê 1'};
 const ac2:Member={...ac,email:'ac2@unit.test'};
 const rm:Member={...ac,email:'rm@unit.test',role:'RM'};
 const tv:Member={...ac,email:'tv@unit.test',role:'tv'};
 const now=Date.parse('2026-09-27T12:00:00Z');
-function create(s:any,name='Maria Aparecida da Silva',service='AC',at=now,extra={}){return mutate(s,reception,{action:'create',name,service,...extra},at) as any}
+function create(s:any,name='Maria Aparecida da Silva',service:Service='AC',at=now,extra={}){return mutate(s,reception,{action:'create',name,service,...extra},at) as any}
 function call(s:any,m=ac,at=now){return mutate(s,m,{action:'call',acknowledge:true},at) as any}
 test('voz usa primeiro e último nomes',()=>{assert.equal(spokenName(' Maria Aparecida da Silva '),'Maria Silva');assert.equal(spokenName('Ana'),'Ana')});
 test('numeração reinicia por atividade e data, mantendo histórico',()=>{const s=emptyState();create(s);create(s,'João','RM');create(s,'Pedro');create(s,'Ana','AC',now+86400000);assert.deepEqual(s.patients.map(p=>p.code),['AC-001','RM-001','AC-002','AC-001']);assert.equal(s.patients.length,4)});
@@ -21,3 +21,20 @@ test('TV serializa anúncios e exige sete segundos',()=>{const s=emptyState();cr
 test('transferência mantém um registro somente na fila final',()=>{const s=emptyState();const p=create(s);mutate(s,reception,{action:'transfer',id:p.id,service:'ED'},now);assert.equal(s.patients.length,1);assert.equal(s.patients[0].service,'ED');assert.equal(s.patients[0].code,'ED-001');assert.match(s.patients[0].events[1].text,/AC-001/)});
 test('ausência só após anúncio; retorno preserva senha',()=>{const s=emptyState();const p=create(s);call(s);assert.throws(()=>mutate(s,ac,{action:'absent',id:p.id},now),/anúncio/);mutate(s,tv,{action:'claimAnnouncement',lease:'one'},now);mutate(s,ac,{action:'absent',id:p.id},now+100);mutate(s,ac,{action:'return',id:p.id},now+200);assert.equal(s.patients[0].code,'AC-001');assert.equal(s.patients[0].status,'waiting')});
 test('múltiplas atividades são sequenciais',()=>{const s=emptyState();const p=create(s,'Maria','AC',now,{next:['ED']});call(s);mutate(s,tv,{action:'claimAnnouncement',lease:'one'},now);mutate(s,ac,{action:'start',id:p.id},now+8000);mutate(s,ac,{action:'finish',id:p.id},now+9000);assert.equal(s.patients[0].service,'ED');assert.equal(s.patients[0].status,'waiting');assert.equal(s.patients.length,1)});
+
+test('chamada visual desbloqueia início e conclusão do atendimento',()=>{
+ const s=emptyState();const patient=create(s);
+ call(s);
+ assert.equal(s.patients[0].status,'calling');
+ assert.throws(()=>mutate(s,ac,{action:'start',id:patient.id},now+1),/anúncio/);
+ // The TV claims visual announcements even if speech has not been enabled.
+ const announcement=mutate(s,tv,{action:'claimAnnouncement',lease:'visual'},now+100) as any;
+ assert.equal(announcement.name,'Maria Aparecida da Silva');
+ assert.ok(s.patients[0].announced);
+ mutate(s,ac,{action:'start',id:patient.id},now+200);
+ assert.equal(s.patients[0].status,'serving');
+ mutate(s,ac,{action:'finish',id:patient.id},now+300);
+ assert.equal(s.patients[0].status,'done');
+ mutate(s,tv,{action:'finishAnnouncement',id:announcement.id,lease:'visual'},now+7200);
+ assert.ok(s.announcements[0].ended);
+});

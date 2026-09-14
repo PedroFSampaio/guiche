@@ -1,0 +1,35 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {unzipSync,strFromU8} from 'fflate';
+import {writeFileSync} from 'node:fs';
+import {historyRows,historyWorkbook} from '../lib/history-export.ts';
+import {visibleQueue} from '../lib/visible-queue.ts';
+import {emptyState,mutate,type Member} from '../lib/queue.ts';
+const operator:Member={email:'a',name:'Ana',username:'ana',role:'AC',location:'1'};
+const admin:Member={email:'admin',name:'Admin',role:'admin',location:'1'};
+const state=emptyState(),now=Date.parse('2026-09-14T13:00:00Z');
+mutate(state,admin,{action:'create',name:'=Paciente & <Teste>',service:'AC'},now);
+mutate(state,admin,{action:'create',name:'Outro setor',service:'RM'},now);
+mutate(state,operator,{action:'call'},now+1000);
+state.patients[0].announced=now+2000;
+mutate(state,operator,{action:'start',id:state.patients[0].id},now+3000);
+mutate(state,operator,{action:'finish',id:state.patients[0].id},now+4000);
+test('histórico e exportação respeitam setor, data e identidade preservada',()=>{
+ const rows=historyRows(state,operator,'2026-09-14');
+ assert.equal(rows.length,1);assert.equal(rows[0][7],'Ana');assert.equal(rows[0][8],'ana');
+ assert.equal(rows[0][6],'10:00:03');assert.equal(rows[0][9],'Sim');
+ assert.deepEqual(visibleQueue(state,operator,'2026-09-14').dates,['2026-09-14']);
+ assert.equal(historyRows(state,admin,'2026-09-14').length,2);
+ assert.equal(historyRows(state,operator,'2026-09-13').length,0);
+ assert.throws(()=>historyRows(state,{...operator,role:'tv'},'2026-09-14'));
+ assert.throws(()=>historyRows(state,{...operator,role:'reception'},'2026-09-14'));
+ assert.throws(()=>historyRows(state,operator,'../../bad'));
+ state.patients[0].status='automatic';assert.equal(historyRows(state,operator,'2026-09-14')[0][9],'Não');state.patients[0].status='done';
+});
+test('arquivo XLSX contém texto seguro, filtros e cabeçalho fixo',()=>{
+ const bytes=historyWorkbook(state,operator,'2026-09-14'),zip=unzipSync(bytes);
+ const sheet=strFromU8(zip['xl/worksheets/sheet1.xml']);
+ assert.ok(sheet.includes('=Paciente &amp; &lt;Teste&gt;'));assert.ok(!sheet.includes('<f>'));
+ assert.ok(!sheet.includes('Outro setor'));assert.ok(sheet.includes('state="frozen"'));assert.ok(sheet.includes('autoFilter'));
+ writeFileSync('.local-tools/historico-teste.xlsx',bytes);
+});

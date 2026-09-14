@@ -1,0 +1,28 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { emptyState, mutate, dayKey, type Member } from '../lib/queue.ts';
+import { visibleQueue } from '../lib/visible-queue.ts';
+const admin:Member={email:'a',name:'Admin',role:'admin',location:'1'};
+const reception:Member={email:'r',name:'Recepção',role:'reception',location:''};
+const operator:Member={email:'o',name:'Atendente',role:'AC',location:'1'};
+const tv:Member={email:'t',name:'TV',role:'tv',location:''};
+test('perfis isolam dados, histórico, equipe e ações',()=>{
+ const state=emptyState();state.members=[admin,reception,operator,tv];
+ mutate(state,reception,{action:'create',name:'Pessoa A',service:'AC'});
+ mutate(state,reception,{action:'create',name:'Pessoa B',service:'RM'});
+ assert.equal(visibleQueue(state,operator,null).patients.length,1);
+ assert.equal(visibleQueue(state,reception,null).patients.length,2);
+ assert.equal(visibleQueue(state,operator,null).members,undefined);
+ assert.throws(()=>visibleQueue(state,reception,'2000-01-01'));
+ assert.throws(()=>visibleQueue(state,tv,'2000-01-01'));
+ const payload=JSON.stringify(visibleQueue(state,tv,null));
+ assert.ok(!payload.includes('Pessoa A'));
+ assert.ok(!payload.includes('events'));
+ assert.ok(!payload.includes('priority'));
+ for(const actor of [operator,tv])assert.throws(()=>mutate(state,actor,{action:'create',name:'Pessoa C',service:'AC'}));
+ assert.throws(()=>mutate(state,reception,{action:'call',service:'AC'}));
+ for(const actor of [reception,operator])assert.throws(()=>mutate(state,actor,{action:'claimAnnouncement',lease:'x'}));
+ for(const action of ['start','finish','cancelled','transfer','return','edit','recall','absent','left'])assert.throws(()=>mutate(state,tv,{action,id:state.patients[0].id,service:'RM'}));
+ mutate(state,operator,{action:'call'});
+ assert.equal(visibleQueue(state,tv,dayKey()).patients.length,1);
+});
