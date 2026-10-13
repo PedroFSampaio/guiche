@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev:local": "node scripts/run-local.mjs",
-    "install:ci": "node scripts/install-ci.mjs",
+    "install:ci": "npm ci",
     "dev": "node scripts/run-local.mjs dev",
     "build": "node scripts/run-local.mjs build",
     "start": "node scripts/run-local.mjs start",
