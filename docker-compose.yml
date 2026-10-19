@@ -1,6 +1,7 @@
 services:
   guiche:
     build: .
+    image: guiche:latest
     container_name: guiche
     restart: unless-stopped
     environment:
