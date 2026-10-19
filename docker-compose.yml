@@ -3,7 +3,7 @@ services:
     build:
       context: https://github.com/PedroFSampaio/guiche.git#main
       dockerfile: Dockerfile
-    image: guiche:latest
+    pull_policy: build
     restart: unless-stopped
     environment:
       GUICHE_PUBLIC_ORIGIN: ${GUICHE_PUBLIC_ORIGIN:-https://172.20.0.15}
