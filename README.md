@@ -15,11 +15,12 @@ Os comandos padrão usam Next.js e SQLite. Preserve `.local-data/guiche.sqlite`.
 
 O container usa a rede Docker externa `lan` com IP fixo `172.20.0.15` e não publica portas. O acesso externo fica por conta do proxy reverso.
 
+- O Portainer constrói a imagem a partir do `Dockerfile` do repositório; o GitHub fica apenas com o código.
 - Crie um `.env` com o endereço público do proxy, por exemplo `GUICHE_PUBLIC_ORIGIN=https://guiche.exemplo.local`.
 - Suba com `docker compose up -d --build`.
 - O proxy deve encaminhar para `http://172.20.0.15:3000` preservando o cabeçalho `Host`.
 - O HTTPS é terminado no proxy; não exponha a porta 3000 fora da rede Docker.
-- Os dados ficam em `./.local-data`. Backup: `docker compose exec guiche node scripts/backup-local.mjs`.
+- Os dados ficam no volume Docker `guiche-data`. Backup: `docker compose exec guiche node scripts/backup-local.mjs`.
 
 ## Rede da unidade
 

@@ -1,19 +1,23 @@
 services:
   guiche:
-    build: .
+    build:
+      context: https://github.com/PedroFSampaio/guiche.git#main
+      dockerfile: Dockerfile
     image: guiche:latest
-    container_name: guiche
     restart: unless-stopped
     environment:
       GUICHE_PUBLIC_ORIGIN: ${GUICHE_PUBLIC_ORIGIN:-https://172.20.0.15}
       GUICHE_DATA_DIR: /app/.local-data
     volumes:
-      - ./.local-data:/app/.local-data
+      - guiche-data:/app/.local-data
     expose:
       - "3000"
     networks:
       lan:
         ipv4_address: 172.20.0.15
+
+volumes:
+  guiche-data:
 
 networks:
   lan:
