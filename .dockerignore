@@ -1,0 +1,14 @@
+node_modules
+.next
+.next-local
+.next-review
+.local-data
+.git
+outputs
+work
+tests
+coverage
+.env*
+*.pem
+npm-debug.log*
+.DS_Store

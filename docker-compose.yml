@@ -1,0 +1,19 @@
+services:
+  guiche:
+    build: .
+    container_name: guiche
+    restart: unless-stopped
+    environment:
+      GUICHE_PUBLIC_ORIGIN: ${GUICHE_PUBLIC_ORIGIN:-https://172.20.0.15}
+      GUICHE_DATA_DIR: /app/.local-data
+    volumes:
+      - ./.local-data:/app/.local-data
+    expose:
+      - "3000"
+    networks:
+      lan:
+        ipv4_address: 172.20.0.15
+
+networks:
+  lan:
+    external: true

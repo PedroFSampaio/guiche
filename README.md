@@ -11,6 +11,16 @@ Sistema local da unidade com usuário e senha, filas por atividade e painel da t
 
 Os comandos padrão usam Next.js e SQLite. Preserve `.local-data/guiche.sqlite`. Backups ficam em `.local-data/backups`; mantenha também uma cópia protegida fora deste computador. Os testes usam bancos separados e pacientes fictícios.
 
+## Docker (servidor)
+
+O container usa a rede Docker externa `lan` com IP fixo `172.20.0.15` e não publica portas. O acesso externo fica por conta do proxy reverso.
+
+- Crie um `.env` com o endereço público do proxy, por exemplo `GUICHE_PUBLIC_ORIGIN=https://guiche.exemplo.local`.
+- Suba com `docker compose up -d --build`.
+- O proxy deve encaminhar para `http://172.20.0.15:3000` preservando o cabeçalho `Host`.
+- O HTTPS é terminado no proxy; não exponha a porta 3000 fora da rede Docker.
+- Os dados ficam em `./.local-data`. Backup: `docker compose exec guiche node scripts/backup-local.mjs`.
+
 ## Rede da unidade
 
 Endereço preparado: **https://172.20.64.7:5443**. Mantenha o servidor ligado, sem suspensão e com IP estável. Todos os computadores devem acessar esse mesmo servidor, sem copiar o banco para cada máquina.
