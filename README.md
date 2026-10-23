@@ -16,6 +16,7 @@ Os comandos padrão usam Next.js e SQLite. Preserve `.local-data/guiche.sqlite`.
 O container usa a rede Docker externa `lan` com IP fixo `172.20.0.15` e não publica portas. O acesso externo fica por conta do proxy reverso.
 
 - O Portainer constrói a imagem a partir do `Dockerfile` do repositório; o GitHub fica apenas com o código.
+- No primeiro boot, sem credenciais no volume, cria o admin `admin` com senha `guiche1234`. Troque a senha depois em Equipe e acessos. Para usar outro acesso, defina `GUICHE_ADMIN_USER` e `GUICHE_ADMIN_PASSWORD`.
 - Crie um `.env` com o endereço público do proxy, por exemplo `GUICHE_PUBLIC_ORIGIN=https://guiche.exemplo.local`.
 - Suba com `docker compose up -d --build`.
 - O proxy deve encaminhar para `http://172.20.0.15:3000` preservando o cabeçalho `Host`.

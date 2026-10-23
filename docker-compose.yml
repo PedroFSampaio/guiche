@@ -8,6 +8,8 @@ services:
     environment:
       GUICHE_PUBLIC_ORIGIN: ${GUICHE_PUBLIC_ORIGIN:-https://172.20.0.15}
       GUICHE_DATA_DIR: /app/.local-data
+      GUICHE_ADMIN_USER: ${GUICHE_ADMIN_USER:-admin}
+      GUICHE_ADMIN_PASSWORD: ${GUICHE_ADMIN_PASSWORD:-guiche1234}
     volumes:
       - guiche-data:/app/.local-data
     expose:

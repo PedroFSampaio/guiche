@@ -114,6 +114,14 @@ export function bootstrap(body: {
         throw error;
     }
 }
+export function ensureDefaultAdmin() {
+    const username = process.env.GUICHE_ADMIN_USER;
+    const password = process.env.GUICHE_ADMIN_PASSWORD;
+    if (!username || !password || !needsBootstrap())
+        return false;
+    bootstrap({ username, password });
+    return true;
+}
 export function saveMember(actor: Member, body: {
     id?: string;
     username?: unknown;
