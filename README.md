@@ -23,6 +23,8 @@ O container usa a rede Docker externa `lan` com IP fixo `172.20.0.15` e não pub
 - O HTTPS é terminado no proxy; não exponha a porta 3000 fora da rede Docker.
 - Os dados ficam no volume Docker `guiche-data`. Backup: `docker compose exec guiche node scripts/backup-local.mjs`.
 
+O domínio `https://chat.saomanuel.sp.gov.br` é autorizado pela aplicação, inclusive quando `GUICHE_PUBLIC_ORIGIN` contém o IP interno padrão do Docker. O proxy deve preservar `Host: chat.saomanuel.sp.gov.br`; a origem HTTPS do navegador precisa corresponder a esse host. Cabeçalhos `X-Forwarded-Host` não concedem autorização. O login usa cookie Secure nesse domínio. Para outra URL HTTPS, configure `GUICHE_PUBLIC_ORIGIN` com o endereço completo (sem caminho); ela também será autorizada, exigindo a mesma correspondência entre origem e host. Após atualizar o código, reconstrua e recrie o serviço no Portainer ou com `docker compose up -d --build guiche`, preservando o volume de dados.
+
 ## Rede da unidade
 
 Endereço preparado: **https://172.20.64.7:5443**. Mantenha o servidor ligado, sem suspensão e com IP estável. Todos os computadores devem acessar esse mesmo servidor, sem copiar o banco para cada máquina.

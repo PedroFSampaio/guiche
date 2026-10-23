@@ -1,6 +1,6 @@
 import { authInput, readInput } from '../../../lib/request-input';
 import { COOKIE, MAX_AGE, bootstrap, login, logout, needsBootstrap, sessionMember, saveMember, televisionSessions, controlTelevision, televisionAudio, setTelevisionAudio, deleteMember } from '../../../lib/local-auth';
-import { validateOrigin, requestHostAllowed, publicOrigin } from '../../../lib/request-origin';
+import { validateOrigin, requestHostAllowed, requestUsesHttps } from '../../../lib/request-origin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const headers = { 'Cache-Control': 'no-store' };
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
             throw Error('Ação inválida.');
         const response = Response.json({ ok: true }, { headers });
         if (token || body.action === 'logout')
-            response.headers.set('Set-Cookie', `${COOKIE}=${token ?? ''}; HttpOnly; SameSite=Strict; Path=/;${publicOrigin() ? ' Secure;' : ''} Max-Age=${token ? MAX_AGE : 0}`);
+            response.headers.set('Set-Cookie', `${COOKIE}=${token ?? ''}; HttpOnly; SameSite=Strict; Path=/;${requestUsesHttps(request.headers) ? ' Secure;' : ''} Max-Age=${token ? MAX_AGE : 0}`);
         return response;
     }
     catch (error) {
