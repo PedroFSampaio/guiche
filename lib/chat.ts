@@ -15,7 +15,7 @@ export type ChatMessage = { id: number; sender: string; sender_name: string; rec
 export type ChatContact = { id: string; name: string; active: boolean };
 export type ChatSnapshot = { contacts: ChatContact[]; messages: ChatMessage[]; unread: Record<string, number>; latest: ChatMessage | null; hasOlder: boolean };
 const columns = 'id,sender,sender_name,recipient,body,created';
-export function canChat(member: Member) { return member.role !== 'tv' && !isReserveAdmin(member); }
+export function canChat(member: Member) { return member.role !== 'tv' && member.role !== 'kiosk' && !isReserveAdmin(member); }
 function members(): Member[] {
  const row = sqlite.prepare("SELECT data FROM unit_state WHERE id='unit'").get();
  return row ? (JSON.parse(String(row.data)).members ?? []) : [];

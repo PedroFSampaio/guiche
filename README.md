@@ -48,6 +48,10 @@ A conta original de reserva **Sampaio** mantém os privilégios administrativos,
 
 ## Atendimento e painel
 
+Para ativar o autoatendimento, cadastre um acesso com a função **Tablet de autoatendimento** em **Equipe e acessos**. Abra o endereço do Guichê no tablet e entre com essa conta. Na tela da recepção, em **Tablets de autoatendimento**, clique em **Liberar tablet**. A mesma área permite desconectar o dispositivo. Ao expirar a sessão, entre e autorize novamente.
+
+O paciente informa nome completo e data de nascimento e toca em **Alto Custo**, **Retirada de medicamentos** ou **Entrega de documentos**. O botão toca um bipe e anuncia a atividade quando o áudio está disponível. A janela de confirmação mostra os dados e a opção escolhida. Após tocar em **Confirmar senha**, a senha entra na fila existente e é exibida na tela; o formulário é limpo para o próximo paciente. A equipe pode conferir a data de nascimento no atendimento, mas ela não aparece na TV nem no Excel. O tablet não consulta pacientes, histórico ou chat. A recepção continua disponível para correções e atendimento prioritário.
+
 As filas seguem prioridade e ordem de entrada por atividade e dia, no fuso de São Paulo. Transferências e atividades adicionais mantêm o registro do paciente. Cancelamentos, ausências e conclusões permanecem no histórico. O Excel informa chegada, chamada, início, responsável e resultado.
 
 O painel alterna suavemente entre rosa (Alto Custo), amarelo (Controlados/Retirada) e cinza (Documentos). O último paciente permanece até a próxima chamada. Anúncios são serializados com mínimo de sete segundos e espera pelo término da voz. Início e ausência exigem anúncio exibido. Depois do início, é possível encerrar ou concluir e encaminhar.

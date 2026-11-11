@@ -6,5 +6,5 @@ export async function getCurrentUser() {
     if (!requestHostAllowed(requestHeaders))
         return null;
     const member = sessionMember(requestHeaders.get('cookie'));
-    return member ? { userId: member.email, displayName: member.name, email: member.email } : null;
+    return member ? { userId: member.email, displayName: member.name, email: member.email, role: member.role } : null;
 }

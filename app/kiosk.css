@@ -1,0 +1,47 @@
+.kiosk-screen {
+    margin: 0;
+    width: 100%;
+    min-height: 100svh;
+    padding: clamp(16px, 4vw, 44px);
+    background: radial-gradient(ellipse at 50% 0%, #dff3ef, transparent 70%), #f2f6f8;
+}
+.kiosk-content { width: min(100%, 980px); margin: auto; }
+.kiosk-content .brand { color: #13434b; }
+.kiosk-content > .eyebrow { margin: 12px 0 20px; }
+.kiosk-form, .kiosk-result { padding: clamp(18px, 4vw, 40px); }
+.kiosk-screen h1 { font-size: clamp(30px, 5vw, 52px); line-height: 1.1; }
+.kiosk-screen h1 + p { margin: 10px 0 20px; font-size: 18px; }
+.kiosk-fields { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+.kiosk-fields input { min-height: 54px; font-size: 18px; }
+.kiosk-screen fieldset { border: 0; min-width: 0; margin: 20px 0 0; padding: 0; }
+.kiosk-screen legend { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
+.kiosk-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.kiosk-option, .kiosk-ticket { --ticket-bg: #f1f4f7; --ticket-ink: #283c49; --ticket-border: #8b9ba8; color: var(--ticket-ink); background: var(--ticket-bg); }
+.kiosk-option.AC, .kiosk-ticket.AC { --ticket-bg: #ffe8ef; --ticket-ink: #652743; --ticket-border: #ba7893; }
+.kiosk-option.RM, .kiosk-ticket.RM { --ticket-bg: #fff1bd; --ticket-ink: #634900; --ticket-border: #a88626; }
+.kiosk-option { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; text-align: left; gap: 7px; min-height: 124px; padding: 14px; border: 1px solid var(--ticket-border); border-radius: 14px; }
+.kiosk-option strong { font-size: 17px; line-height: 1.25; }
+.kiosk-option span { font-size: 14px; }
+.kiosk-option:focus-visible { outline: 3px solid #0e685f; outline-offset: 2px; }
+.kiosk-option:not(:disabled):hover { background: color-mix(in srgb, var(--ticket-bg) 85%, var(--ticket-border)); }
+.kiosk-help { margin-top: 22px; }
+.kiosk-result { display: grid; justify-items: center; gap: 15px; text-align: center; }
+.kiosk-result > svg { color: #147769; width: 50px; height: 50px; }
+.kiosk-ticket { display: block; border-radius: 16px; padding: 12px 28px; font-size: clamp(44px, 12vw, 90px); line-height: 1; font-variant-numeric: tabular-nums; }
+.kiosk-result .primary { min-height: 52px; min-width: 160px; }
+.kiosk-confirm { position: fixed; inset: 0; margin: auto; width: min(520px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: clamp(20px, 5vw, 32px); border: 1px solid #cfdbe2; border-radius: 18px; background: white; color: #192e3a; box-shadow: 0 24px 70px #102f3e40; }
+.kiosk-confirm::backdrop { background: #102f3e92; }
+.kiosk-confirm h2 { margin-bottom: 8px; font-size: clamp(23px, 4vw, 30px); }
+.kiosk-confirm dl { padding: 16px; margin: 18px 0; border-radius: 12px; background: #f2f6f8; }
+.kiosk-confirm dt { font-size: 14px; color: #45606e; }
+.kiosk-confirm dd { margin: 4px 0 14px; font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
+.kiosk-confirm dd:last-child { margin-bottom: 0; }
+.kiosk-confirm-actions { display: flex; gap: 12px; }
+.kiosk-confirm-actions button { flex: 1; min-height: 52px; }
+.kiosk-confirm-actions button:focus-visible { outline: 3px solid #0e685f; outline-offset: 2px; }
+@media (max-width: 600px) {
+    .kiosk-fields, .kiosk-options { grid-template-columns: 1fr; gap: 8px; }
+    .kiosk-option { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; min-height: 68px; }
+    .kiosk-option svg { grid-row: span 2; }
+    .kiosk-option span { grid-column: 2; }
+}

@@ -56,11 +56,12 @@ export function sessionMember(cookie: string | null, includePending = false): Me
         return null;
     const session = sqlite.prepare('SELECT member,approved FROM sessions WHERE token=? AND expires>?').get(digest(token), Date.now());
     const member = session ? metadata().members.find((m: Member) => m.email === session.member) ?? null : null;
-    return member?.role === 'tv' && !session?.approved && !includePending ? null : member;
+    return (member?.role === 'tv' || member?.role === 'kiosk') && !session?.approved && !includePending ? null : member;
 }
 export function logout(cookie: string | null) {
-    if (sessionMember(cookie, true)?.role === 'tv')
-        throw Error('Somente a administração ou recepção pode desconectar a TV.');
+    const role = sessionMember(cookie, true)?.role;
+    if (role === 'tv' || role === 'kiosk')
+        throw Error('Somente a administração ou recepção pode desconectar este dispositivo.');
     const token = cookie?.split(';').map(x => x.trim()).find(x => x.startsWith(COOKIE + '='))?.slice(COOKIE.length + 1);
     if (token)
         sqlite.prepare('DELETE FROM sessions WHERE token=?').run(digest(token));
@@ -136,7 +137,7 @@ export function saveMember(actor: Member, body: {
     const name = String(body.name ?? '').trim(), location = String(body.location ?? '').trim();
     if (!name || name.length > 100)
         throw Error('Informe um nome de até 100 caracteres.');
-    if (!['admin', 'reception', 'tv', 'AC', 'RM', 'ED'].includes(body.role))
+    if (!['admin', 'reception', 'tv', 'kiosk', 'AC', 'RM', 'ED'].includes(body.role))
         throw Error('Perfil inválido.');
     if (location.length > 80 || (['AC', 'RM', 'ED'].includes(body.role) && !location))
         throw Error('Informe o local de atendimento (até 80 caracteres).');
@@ -179,26 +180,30 @@ export function saveMember(actor: Member, body: {
         throw error;
     }
 }
-export function televisionSessions(actor: Member) {
+export function deviceSessions(actor: Member, role: 'tv' | 'kiosk') {
     if (!['admin', 'reception'].includes(actor.role))
-        throw Error('Controle da TV restrito à administração e recepção.');
+        throw Error('Controle de dispositivos restrito à administração e recepção.');
     const members: Member[] = metadata().members;
     return sqlite.prepare('SELECT token,member,expires,approved FROM sessions WHERE expires>?').all(Date.now()).flatMap(session => {
-        const member = members.find(m => m.email === session.member && m.role === 'tv');
+        const member = members.find(m => m.email === session.member && m.role === role);
         return member ? [{ id: session.token, name: member.name, username: member.username, approved: !!session.approved, expires: session.expires }] : [];
     });
 }
-export function controlTelevision(actor: Member, id: string, action: string) {
-    const session = televisionSessions(actor).find(s => s.id === id);
-    if (!session)
-        throw Error('Conexão da televisão não encontrada.');
-    if (action === 'approveTV')
+export const televisionSessions = (actor: Member) => deviceSessions(actor, 'tv');
+function controlDevice(actor: Member, id: string, role: 'tv' | 'kiosk', approve: boolean) {
+    if (!deviceSessions(actor, role).some(s => s.id === id))
+        throw Error(role === 'tv' ? 'Conexão da televisão não encontrada.' : 'Conexão do tablet não encontrada.');
+    if (approve)
         sqlite.prepare('UPDATE sessions SET approved=1 WHERE token=?').run(id);
-    else if (action === 'disconnectTV')
-        sqlite.prepare('DELETE FROM sessions WHERE token=?').run(id);
     else
-        throw Error('Ação inválida.');
+        sqlite.prepare('DELETE FROM sessions WHERE token=?').run(id);
 }
+export function controlTelevision(actor: Member, id: string, action: string) {
+    if (action !== 'approveTV' && action !== 'disconnectTV')
+        throw Error('Ação inválida.');
+    controlDevice(actor, id, 'tv', action === 'approveTV');
+}
+export const controlKiosk = (actor: Member, id: string, approve: boolean) => controlDevice(actor, id, 'kiosk', approve);
 sqlite.exec('CREATE TABLE IF NOT EXISTS tv_audio (id INTEGER PRIMARY KEY CHECK(id=1), voice INTEGER NOT NULL DEFAULT 0, chime INTEGER NOT NULL DEFAULT 0, confirmation INTEGER NOT NULL DEFAULT 0)');
 sqlite.prepare('INSERT OR IGNORE INTO tv_audio (id) VALUES (1)').run();
 export function televisionAudio() {

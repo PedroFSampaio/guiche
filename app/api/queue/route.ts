@@ -1,7 +1,7 @@
 import { queueInput, readInput } from '../../../lib/request-input';
 import { historyWorkbook } from '../../../lib/history-export';
 import { visibleQueue } from '../../../lib/visible-queue';
-import { validateOrigin } from '../../../lib/request-origin';
+import { requestHostAllowed, validateOrigin } from '../../../lib/request-origin';
 import { env } from '@/lib/runtime-env';
 import { getCurrentUser } from '../../server-session';
 import { mutate, dayKey, type State } from '../../../lib/queue';
@@ -53,17 +53,25 @@ async function identity() { const user = await getCurrentUser(); if (!user)
 function fail(e: unknown) { const message = e instanceof Error ? e.message : 'Falha inesperada.'; return Response.json({ error: message }, { status: 400, headers: { 'Cache-Control': 'no-store' } }); }
 export async function GET(request: Request) {
     try {
+        const headers = { 'Cache-Control': 'no-store' };
+        if (!requestHostAllowed(request.headers))
+            return Response.json({ error: 'Origem não autorizada.' }, { status: 403, headers });
         const user = await getCurrentUser();
         if (!user) {
             const { sessionMember } = await import('../../../lib/local-auth');
             const pending = sessionMember(request.headers.get('cookie'), true);
-            return Response.json({ login: true, tvPending: pending?.role === 'tv' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
+            return Response.json({ login: true, tvPending: pending?.role === 'tv', kioskPending: pending?.role === 'kiosk' }, { status: 401, headers });
+        }
+        const params = new URL(request.url).searchParams;
+        if (user.role === 'kiosk') {
+            if (params.has('day') || params.has('export'))
+                return Response.json({ error: 'Acesso restrito à emissão de senhas.' }, { status: 403, headers });
+            return Response.json({ kiosk: true }, { headers });
         }
         const { state } = await read();
         const me = state.members.find(m => m.email === user.email);
         if (!me)
             return Response.json({ login: true }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
-        const params = new URL(request.url).searchParams;
         if (params.get('export') === 'xlsx') {
             const day = params.get('day') || dayKey();
             const bytes = historyWorkbook(state, me, day);

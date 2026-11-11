@@ -1,6 +1,6 @@
 export const SERVICES = { AC: 'Alto Custo', RM: 'Retirada de medicamentos', ED: 'Entrega de documentos' };
 export type Service = keyof typeof SERVICES;
-export type Role = Service | 'admin' | 'reception' | 'tv';
+export type Role = Service | 'admin' | 'reception' | 'tv' | 'kiosk';
 export type Member = {
     username?: string;
     email: string;
@@ -15,6 +15,8 @@ export type Patient = {
     code: string;
     name: string;
     service: Service;
+    birthDate?: string;
+    kioskReceipt?: { memberId: string; requestId: string; code: string };
     next: Service[];
     priority: boolean;
     created: number;
@@ -55,6 +57,12 @@ export type State = {
 };
 export const emptyState = (): State => ({ members: [], patients: [], announcements: [], counters: {} });
 export const dayKey = (time = Date.now()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(time);
+export function validBirthDate(value: string, now = Date.now()): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < '1900-01-01' || value > dayKey(now))
+        return false;
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
 export const spokenName = (name: string) => { const words = name.trim().split(/\s+/); return words.length > 1 ? `${words[0]} ${words.at(-1)}` : words[0]; };
 export const isOpen = (p: Patient) => ['waiting', 'calling', 'serving'].includes(p.status);
 export const isPending = (p: Patient) => ['calling', 'serving'].includes(p.status);
@@ -72,6 +80,8 @@ export type QueueAction = {
     acknowledge?: boolean;
     lease?: string;
     location?: string;
+    birthDate?: string;
+    requestId?: string;
 };
 function requireService(value: unknown): Service { if (typeof value !== 'string' || !Object.hasOwn(SERVICES, value))
     throw Error('Atividade inválida.'); return value as Service; }
@@ -80,17 +90,32 @@ export function mutate(s: State, m: Member, b: QueueAction, now = Date.now()) {
     const admin = m.role === 'admin';
     const reception = admin || m.role === 'reception';
     const operator = admin || Object.hasOwn(SERVICES, m.role);
-    if (b.action === 'create') {
-        assert(reception, 'Somente a recepção pode cadastrar.');
+    if (m.role === 'kiosk' && b.action !== 'kioskCheckIn')
+        throw Error('Acesso restrito à emissão de senhas.');
+    if (b.action === 'create' || b.action === 'kioskCheckIn') {
+        const kiosk = b.action === 'kioskCheckIn';
+        assert(kiosk ? m.role === 'kiosk' : reception, kiosk ? 'Acesso exclusivo do tablet.' : 'Somente a recepção pode cadastrar.');
         const name = String(b.name || '').trim().replace(/\s+/g, ' ');
         assert(name.length >= 2 && name.length <= 160, 'Informe um nome entre 2 e 160 caracteres.');
         const service = requireService(b.service);
-        const next = Array.isArray(b.next) ? [...new Set<Service>(b.next)] : [];
+        const next = !kiosk && Array.isArray(b.next) ? [...new Set<Service>(b.next)] : [];
         assert(next.every(x => Object.hasOwn(SERVICES, x) && x !== b.service), 'Próximas atividades inválidas.');
-        const p: Patient = { id: crypto.randomUUID(), day, ...allocate(s, service, day), name, service, next, priority: !!b.priority, created: now, queued: now, status: 'waiting', subsequent: [], events: [] };
-        event(p, `Chegada registrada por ${m.name}`, now);
+        if (kiosk) {
+            assert(name.split(' ').filter(word => /\p{L}/u.test(word)).length >= 2, 'Informe seu nome completo.');
+            assert(b.birthDate && validBirthDate(b.birthDate, now), 'Informe uma data de nascimento válida.');
+            assert(b.requestId, 'Solicitação inválida.');
+            const receipt = s.patients.find(p => p.kioskReceipt?.memberId === m.email && p.kioskReceipt.requestId === b.requestId)?.kioskReceipt;
+            if (receipt)
+                return { code: receipt.code };
+        }
+        const p: Patient = { id: crypto.randomUUID(), day, ...allocate(s, service, day), name, service, next, priority: !kiosk && !!b.priority, created: now, queued: now, status: 'waiting', subsequent: [], events: [] };
+        if (kiosk) {
+            p.birthDate = b.birthDate;
+            p.kioskReceipt = { memberId: m.email, requestId: b.requestId!, code: p.code };
+        }
+        event(p, kiosk ? 'Chegada registrada no autoatendimento.' : `Chegada registrada por ${m.name}`, now);
         s.patients.push(p);
-        return { id: p.id, code: p.code };
+        return kiosk ? { code: p.code } : { id: p.id, code: p.code };
     }
     if (b.action === 'claimAnnouncement') {
         assert(admin || m.role === 'tv', 'Acesso exclusivo da TV.');

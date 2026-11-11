@@ -1,20 +1,26 @@
 import { z } from 'zod';
 const service = z.enum(['AC', 'RM', 'ED']);
-export const queueInput = z.object({
+const staffQueueInput = z.object({
     action: z.enum(['create', 'call', 'claimAnnouncement', 'finishAnnouncement', 'edit', 'recall', 'start', 'return', 'transfer', 'finish', 'absent', 'left', 'cancelled']),
     id: z.string().max(100).optional(), name: z.string().max(160).optional(),
     service: service.optional(), next: z.array(service).max(2).optional(),
     priority: z.boolean().optional(), acknowledge: z.boolean().optional(),
     lease: z.string().min(1).max(99).optional(), location: z.string().max(80).optional()
 }).strict();
+export const queueInput = z.union([staffQueueInput, z.object({
+    action: z.literal('kioskCheckIn'), name: z.string().max(160), birthDate: z.string().length(10),
+    service, requestId: z.string().uuid(),
+}).strict()]);
 export const authInput = z.discriminatedUnion('action', [
     z.object({ action: z.literal('login'), username: z.string().max(100), password: z.string().max(128) }).strict(),
     z.object({ action: z.literal('bootstrap'), username: z.string().max(40), password: z.string().max(128) }).strict(),
     z.object({ action: z.literal('logout') }).strict(),
-    z.object({ action: z.literal('member'), id: z.string().max(100).optional(), username: z.string().max(40), password: z.string().max(128).optional(), name: z.string().max(100), role: z.enum(['admin', 'reception', 'tv', 'AC', 'RM', 'ED']), location: z.string().max(80).optional() }).strict(),
+    z.object({ action: z.literal('member'), id: z.string().max(100).optional(), username: z.string().max(40), password: z.string().max(128).optional(), name: z.string().max(100), role: z.enum(['admin', 'reception', 'tv', 'kiosk', 'AC', 'RM', 'ED']), location: z.string().max(80).optional() }).strict(),
     z.object({ action: z.literal('deleteMember'), id: z.string().max(100) }).strict(),
     z.object({ action: z.literal('approveTV'), id: z.string().max(100) }).strict(),
     z.object({ action: z.literal('disconnectTV'), id: z.string().max(100) }).strict(),
+    z.object({ action: z.literal('approveKiosk'), id: z.string().max(100) }).strict(),
+    z.object({ action: z.literal('disconnectKiosk'), id: z.string().max(100) }).strict(),
     z.object({ action: z.literal('tvAudio'), setting: z.enum(['voice', 'chime']), enabled: z.boolean() }).strict()
 ]);
 export async function readInput<T>(request: Request, schema: z.ZodType<T>): Promise<T> {

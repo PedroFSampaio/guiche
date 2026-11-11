@@ -1,6 +1,8 @@
 import { isReserveAdmin } from './reserve-admin.ts';
 import { SERVICES, dayKey, isPending, type State, type Member } from './queue.ts';
 export function visibleQueue(state: State, me: Member, requestedDay: string | null) {
+    if (me.role === 'kiosk')
+        throw Error('Acesso restrito à emissão de senhas.');
     const today = dayKey();
     const history = me.role === 'admin' || Object.hasOwn(SERVICES, me.role);
     if (!history && requestedDay && requestedDay !== today)
@@ -12,7 +14,7 @@ export function visibleQueue(state: State, me: Member, requestedDay: string | nu
     return {
         me, day: today,
         dates: history ? [...new Set(visible.map(p => p.day))].sort().reverse() : [],
-        patients: tv ? patients.filter(p => p.day === today && p.status === 'waiting').sort((a, b) => Number(b.priority) - Number(a.priority) || a.queued - b.queued).map(p => ({ id: p.id, code: p.code, service: p.service, status: p.status })) : patients,
+        patients: tv ? patients.filter(p => p.day === today && p.status === 'waiting').sort((a, b) => Number(b.priority) - Number(a.priority) || a.queued - b.queued).map(p => ({ id: p.id, code: p.code, service: p.service, status: p.status })) : patients.map(p => { const visible = { ...p }; delete visible.kioskReceipt; return visible; }),
         announcements: state.announcements.filter(a => a.day === day && (['admin', 'tv'].includes(me.role) || a.service === me.role)).map(a => tv ? { id: a.id, name: a.name, code: a.code, service: a.service, location: a.location, created: a.created, started: a.started, ended: a.ended } : a),
         members: me.role === 'admin' ? state.members.filter(m => !isReserveAdmin(m)) : undefined,
     };

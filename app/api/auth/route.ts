@@ -1,5 +1,5 @@
 import { authInput, readInput } from '../../../lib/request-input';
-import { COOKIE, MAX_AGE, bootstrap, login, logout, needsBootstrap, sessionMember, saveMember, televisionSessions, controlTelevision, televisionAudio, setTelevisionAudio, deleteMember } from '../../../lib/local-auth';
+import { COOKIE, MAX_AGE, bootstrap, login, logout, needsBootstrap, sessionMember, saveMember, televisionSessions, controlTelevision, deviceSessions, controlKiosk, televisionAudio, setTelevisionAudio, deleteMember } from '../../../lib/local-auth';
 import { validateOrigin, requestHostAllowed, requestUsesHttps } from '../../../lib/request-origin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,7 +9,8 @@ export async function GET(request: Request) {
         return Response.json({ error: 'Origem não autorizada.' }, { status: 403, headers });
     const me = sessionMember(request.headers.get('cookie'));
     const pending = sessionMember(request.headers.get('cookie'), true);
-    return Response.json({ bootstrap: needsBootstrap(), me, audio: me && ['admin', 'reception', 'tv'].includes(me.role) ? televisionAudio() : undefined, tvPending: !me && pending?.role === 'tv', televisions: me && ['admin', 'reception'].includes(me.role) ? televisionSessions(me) : undefined }, { headers });
+    const staff = me && ['admin', 'reception'].includes(me.role);
+    return Response.json({ bootstrap: needsBootstrap(), me, audio: me && ['admin', 'reception', 'tv'].includes(me.role) ? televisionAudio() : undefined, tvPending: !me && pending?.role === 'tv', televisions: staff ? televisionSessions(me) : undefined, kiosks: staff ? deviceSessions(me, 'kiosk') : undefined }, { headers });
 }
 export async function POST(request: Request) {
     try {
@@ -22,11 +23,14 @@ export async function POST(request: Request) {
             token = bootstrap(body);
         else if (body.action === 'logout')
             logout(request.headers.get('cookie'));
-        else if ((body.action === 'approveTV' || body.action === 'disconnectTV')) {
+        else if (body.action === 'approveTV' || body.action === 'disconnectTV' || body.action === 'approveKiosk' || body.action === 'disconnectKiosk') {
             const actor = sessionMember(request.headers.get('cookie'));
             if (!actor)
                 throw Error('Entre na sua conta.');
-            controlTelevision(actor, body.id, body.action);
+            if (body.action === 'approveTV' || body.action === 'disconnectTV')
+                controlTelevision(actor, body.id, body.action);
+            else
+                controlKiosk(actor, body.id, body.action === 'approveKiosk');
         }
         else if (body.action === 'tvAudio') {
             const actor = sessionMember(request.headers.get('cookie'));

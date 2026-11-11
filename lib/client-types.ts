@@ -16,6 +16,7 @@ export type AuthStatus = {
     me: Member | null;
     tvPending?: boolean;
     televisions?: TelevisionSession[];
+    kiosks?: TelevisionSession[];
     audio?: AudioPreferences;
     error?: string;
 };
