@@ -6,7 +6,7 @@ const icons = { AC: Tablets, RM: Pill, ED: FileText };
 export function TelevisionScreen({ current, recent, waiting, enabled, onEnable, now, warning }: {
     current: Announcement | null;
     recent: Announcement[];
-    waiting: Patient[];
+    waiting: (Pick<Patient, 'service' | 'code'> & Partial<Pick<Patient, 'name'>>)[];
     enabled: boolean;
     onEnable: () => void;
     now: number;
@@ -33,7 +33,7 @@ export function TelevisionScreen({ current, recent, waiting, enabled, onEnable, 
     {!recent.length && <div className="recent-empty"><Clock3 /><p>As chamadas aparecerão aqui.</p></div>}</div>
    </section>
   </div>
-  <div className="display-queues">{(['AC', 'RM', 'ED'] as Service[]).map(service => { const patients = waiting.filter(p => p.service === service); const Icon = icons[service]; return <section className="display-queue" key={service}><div className="queue-icon"><Icon strokeWidth={1.6}/></div><div className="queue-content"><h2>{labels[service]}</h2><p><strong>{patients.length}</strong><span>aguardando</span></p>{patients[0] && <div className="queue-next"><span>PRÓXIMO:</span><b>{patients[0].name.trim().split(/\s+/)[0]}</b></div>}</div><ChevronRight className="queue-chevron"/></section>; })}</div>
+  <div className="display-queues">{(['AC', 'RM', 'ED'] as Service[]).map(service => { const patients = waiting.filter(p => p.service === service); const next = patients[0]; const Icon = icons[service]; return <section className="display-queue" key={service}><div className="queue-icon"><Icon strokeWidth={1.6}/></div><div className="queue-content"><h2>{labels[service]}</h2><p><strong>{patients.length}</strong><span>aguardando</span></p>{next && <div className="queue-next"><span>PRÓXIMO:</span><b>{next.name?.trim().split(/\s+/)[0] || next.code}</b></div>}</div><ChevronRight className="queue-chevron"/></section>; })}</div>
   <footer className="display-footer"><span>ORGANIZAÇÃO HOJE, MAIS TEMPO PARA O QUE REALMENTE IMPORTA.</span><i /><span>SUA SAÚDE, NOSSO COMPROMISSO</span><Heart /></footer>
  </div>;
 }
